@@ -168,3 +168,181 @@ test("Accepts a valid transfer within the available balance", () => {
   assert.ok(blockchain.pendingTransactions.includes(transaction));
   assert.equal(blockchain.getBalanceofAddress(senderAddress), 100);
 });
+
+test("Mined blocks record the miner and include it in the hash", () => {
+  const blockchain = new Blockchain();
+  const minerKey = ec.genKeyPair();
+  const otherMinerKey = ec.genKeyPair();
+
+  blockchain.minePendingTransactions(
+    minerKey.getPublic("hex")
+  );
+
+  const block = blockchain.chain[1];
+  const originalHash = block.hash;
+
+  assert.equal(
+    block.minerAddress,
+    minerKey.getPublic("hex")
+  );
+
+  block.minerAddress = otherMinerKey.getPublic("hex");
+
+  assert.notEqual(block.calculateHash(), originalHash);
+});
+
+test("Rejects a reward transaction in the first mined block", () => {
+  const blockchain = new Blockchain();
+  const minerKey = ec.genKeyPair();
+  const attackerKey = ec.genKeyPair();
+
+  blockchain.pendingTransactions.push(
+    new Transaction(
+      null,
+      attackerKey.getPublic("hex"),
+      blockchain.miningReward
+    )
+  );
+
+  assert.throws(
+    () => blockchain.minePendingTransactions(
+      minerKey.getPublic("hex")
+    ),
+    /reward/i
+  );
+
+  assert.equal(blockchain.chain.length, 1);
+});
+
+test("Rejects a reward with an incorrect amount", () => {
+  const blockchain = new Blockchain();
+  const firstMiner = ec.genKeyPair();
+  const nextMiner = ec.genKeyPair();
+
+  blockchain.minePendingTransactions(
+    firstMiner.getPublic("hex")
+  );
+
+  blockchain.pendingTransactions[0].amount += 1;
+  const originalLength = blockchain.chain.length;
+
+  assert.throws(
+    () => blockchain.minePendingTransactions(
+      nextMiner.getPublic("hex")
+    ),
+    /reward/i
+  );
+
+  assert.equal(blockchain.chain.length, originalLength);
+});
+
+test("Rejects a reward sent to someone other than the previous miner", () => {
+  const blockchain = new Blockchain();
+  const firstMiner = ec.genKeyPair();
+  const nextMiner = ec.genKeyPair();
+  const attacker = ec.genKeyPair();
+
+  blockchain.minePendingTransactions(
+    firstMiner.getPublic("hex")
+  );
+
+  blockchain.pendingTransactions[0].toAddress =
+    attacker.getPublic("hex");
+
+  const originalLength = blockchain.chain.length;
+
+  assert.throws(
+    () => blockchain.minePendingTransactions(
+      nextMiner.getPublic("hex")
+    ),
+    /reward/i
+  );
+
+  assert.equal(blockchain.chain.length, originalLength);
+});
+
+test("Rejects duplicate reward transactions", () => {
+  const blockchain = new Blockchain();
+  const firstMiner = ec.genKeyPair();
+  const nextMiner = ec.genKeyPair();
+  const attacker = ec.genKeyPair();
+
+  blockchain.minePendingTransactions(
+    firstMiner.getPublic("hex")
+  );
+
+  blockchain.pendingTransactions.push(
+    new Transaction(
+      null,
+      attacker.getPublic("hex"),
+      blockchain.miningReward
+    )
+  );
+
+  const originalLength = blockchain.chain.length;
+
+  assert.throws(
+    () => blockchain.minePendingTransactions(
+      nextMiner.getPublic("hex")
+    ),
+    /reward/i
+  );
+
+  assert.equal(blockchain.chain.length, originalLength);
+});
+
+test("Preserves legitimate delayed mining rewards", () => {
+  const blockchain = new Blockchain();
+  const firstMiner = ec.genKeyPair();
+  const secondMiner = ec.genKeyPair();
+
+  const firstAddress = firstMiner.getPublic("hex");
+  const secondAddress = secondMiner.getPublic("hex");
+
+  blockchain.minePendingTransactions(firstAddress);
+  blockchain.minePendingTransactions(secondAddress);
+
+  const firstBlock = blockchain.chain[1];
+  const secondBlock = blockchain.chain[2];
+
+  const rewards = secondBlock.transactions.filter(
+    (transaction) => transaction.fromAddress === null
+  );
+
+  assert.equal(firstBlock.minerAddress, firstAddress);
+  assert.equal(secondBlock.minerAddress, secondAddress);
+  assert.equal(rewards.length, 1);
+  assert.equal(rewards[0].toAddress, firstAddress);
+  assert.equal(rewards[0].amount, blockchain.miningReward);
+  assert.equal(blockchain.isChainValid(), true);
+});
+
+test("Rejects a forged historical reward even after its block is re-mined", () => {
+  const blockchain = new Blockchain();
+  const firstMiner = ec.genKeyPair();
+  const secondMiner = ec.genKeyPair();
+
+  blockchain.minePendingTransactions(
+    firstMiner.getPublic("hex")
+  );
+
+  blockchain.minePendingTransactions(
+    secondMiner.getPublic("hex")
+  );
+
+  const block = blockchain.chain[2];
+
+  const reward = block.transactions.find(
+    (transaction) => transaction.fromAddress === null
+  );
+
+  assert.ok(reward, "Expected a reward transaction in block 2");
+
+  // Simulate an attacker changing the reward and recalculating
+  // the block's hash and proof of work.
+  reward.amount += 1;
+  block.hash = block.calculateHash();
+  block.mineBlock(blockchain.difficulty);
+
+  assert.equal(blockchain.isChainValid(), false);
+});

@@ -33,7 +33,8 @@ class Transaction {
   }
 
   isValid() {
-    // Mining reward transactions have no sender.
+    // A null sender is reserved for mining reward transactions.
+    // Legitimacy of those rewards is checked at block level.
     if (this.fromAddress === null) {
       return true;
     }
@@ -61,23 +62,34 @@ class Transaction {
 // ==================== BLOCK ====================
 
 class Block {
-  constructor(index, timestamp, transactions, previousHash = "") {
+  constructor(
+    index,
+    timestamp,
+    transactions,
+    previousHash = "",
+    minerAddress = null
+  ) {
     this.index = index;
     this.timestamp = timestamp;
     this.transactions = transactions;
     this.previousHash = previousHash;
+    this.minerAddress = minerAddress;
     this.nonce = 0;
     this.hash = this.calculateHash();
   }
 
   calculateHash() {
-    return SHA256(
-      this.index +
-        this.previousHash +
-        this.timestamp +
-        JSON.stringify(this.transactions) +
-        this.nonce
-    ).toString();
+    // Hash a structured payload so miner identity is protected too.
+    const blockData = JSON.stringify({
+      index: this.index,
+      timestamp: this.timestamp,
+      transactions: this.transactions,
+      previousHash: this.previousHash,
+      minerAddress: this.minerAddress,
+      nonce: this.nonce
+    });
+
+    return SHA256(blockData).toString();
   }
 
   mineBlock(difficulty) {
@@ -126,6 +138,87 @@ class Blockchain {
     return this.chain[this.chain.length - 1];
   }
 
+  // Validate transactions and reward rules before mining or
+  // accepting a block into the chain.
+  validateBlockTransactions(block, previousBlock) {
+    if (!block || !Array.isArray(block.transactions)) {
+      throw new Error("Invalid transactions in block.");
+    }
+
+    const rewards = block.transactions.filter(
+      (transaction) =>
+        transaction && transaction.fromAddress === null
+    );
+
+    if (block.index === 1) {
+      // The first mined block cannot claim a previous miner's reward.
+      if (rewards.length !== 0) {
+        throw new Error(
+          "Reward transaction is not allowed in the first mined block."
+        );
+      }
+    } else {
+      // Each subsequent block must carry the preceding block's reward.
+      if (rewards.length !== 1) {
+        throw new Error(
+          "Each block after the first mined block must contain exactly one reward transaction."
+        );
+      }
+
+      const reward = rewards[0];
+
+      if (reward.amount !== this.miningReward) {
+        throw new Error("Mining reward amount is invalid.");
+      }
+
+      if (
+        !previousBlock ||
+        !previousBlock.minerAddress ||
+        reward.toAddress !== previousBlock.minerAddress
+      ) {
+        throw new Error(
+          "Mining reward recipient does not match the previous block's miner."
+        );
+      }
+    }
+
+    for (const transaction of block.transactions) {
+      if (!transaction) {
+        throw new Error("Invalid transaction in block.");
+      }
+
+      // Reward transactions were checked above.
+      if (transaction.fromAddress === null) {
+        continue;
+      }
+
+      if (
+        typeof transaction.fromAddress !== "string" ||
+        transaction.fromAddress.length === 0 ||
+        typeof transaction.toAddress !== "string" ||
+        transaction.toAddress.length === 0
+      ) {
+        throw new Error(
+          "Transaction must include valid from and to addresses."
+        );
+      }
+
+      if (
+        typeof transaction.amount !== "number" ||
+        !Number.isFinite(transaction.amount) ||
+        transaction.amount <= 0
+      ) {
+        throw new Error(
+          "Transaction amount must be a positive finite number."
+        );
+      }
+
+      if (!transaction.isValid()) {
+        throw new Error("Invalid transaction signature.");
+      }
+    }
+  }
+
   minePendingTransactions(miningRewardAddress) {
     if (
       typeof miningRewardAddress !== "string" ||
@@ -134,18 +227,23 @@ class Blockchain {
       throw new Error("Mining reward address is required.");
     }
 
+    const previousBlock = this.getLatestBlock();
+
     const block = new Block(
       this.chain.length,
       Date.now(),
       this.pendingTransactions,
-      this.getLatestBlock().hash
+      previousBlock.hash,
+      miningRewardAddress
     );
+
+    // Reject invalid pending rewards before mining or changing the chain.
+    this.validateBlockTransactions(block, previousBlock);
 
     block.mineBlock(this.difficulty);
     this.chain.push(block);
 
-    // The reward is paid in the next block that includes
-    // this pending mining-reward transaction.
+    // This reward is included in the next block.
     this.pendingTransactions = [
       new Transaction(
         null,
@@ -158,7 +256,8 @@ class Blockchain {
   // ==================== TRANSACTION VALIDATION ====================
 
   addTransaction(transaction) {
-    if (!transaction.fromAddress || !transaction.toAddress) {
+    if (!transaction || !transaction.fromAddress ||
+        !transaction.toAddress) {
       throw new Error(
         "Transaction must include from and to address"
       );
@@ -180,12 +279,8 @@ class Blockchain {
       );
     }
 
-    // Include previously submitted outgoing transactions
-    // when calculating the funds this sender can spend.
     const availableBalance =
-      this.getAvailableBalanceOfAddress(
-        transaction.fromAddress
-      );
+      this.getAvailableBalanceOfAddress(transaction.fromAddress);
 
     if (transaction.amount > availableBalance) {
       throw new Error(
@@ -196,7 +291,6 @@ class Blockchain {
     this.pendingTransactions.push(transaction);
   }
 
-  // Confirmed balance minus outgoing pending transactions.
   getAvailableBalanceOfAddress(address) {
     let availableBalance = this.getBalanceofAddress(address);
 
@@ -232,21 +326,25 @@ class Blockchain {
   // ==================== CHAIN VALIDATION ====================
 
   isChainValid() {
-    if (
-      !Array.isArray(this.chain) ||
-      this.chain.length === 0
-    ) {
+    if (!Array.isArray(this.chain) || this.chain.length === 0) {
       return false;
     }
 
     const genesisBlock = this.chain[0];
 
-    // Verify the genesis block.
     if (
       genesisBlock.index !== 0 ||
       genesisBlock.previousHash !== "0" ||
-      genesisBlock.hash !== genesisBlock.calculateHash()
+      genesisBlock.minerAddress !== null
     ) {
+      return false;
+    }
+
+    try {
+      if (genesisBlock.hash !== genesisBlock.calculateHash()) {
+        return false;
+      }
+    } catch (error) {
       return false;
     }
 
@@ -254,27 +352,42 @@ class Blockchain {
       const currentBlock = this.chain[i];
       const previousBlock = this.chain[i - 1];
 
-      // Verify transaction signatures.
-      if (!currentBlock.hasValidTransactions()) {
+      if (!currentBlock || !previousBlock) {
         return false;
       }
 
-      // Verify consecutive block indexes.
       if (currentBlock.index !== previousBlock.index + 1) {
         return false;
       }
 
-      // Verify the calculated block hash.
-      if (currentBlock.hash !== currentBlock.calculateHash()) {
+      if (
+        typeof currentBlock.minerAddress !== "string" ||
+        currentBlock.minerAddress.length === 0
+      ) {
         return false;
       }
 
-      // Verify the connection to the previous block.
       if (currentBlock.previousHash !== previousBlock.hash) {
         return false;
       }
 
-      // Verify proof of work.
+      try {
+        this.validateBlockTransactions(
+          currentBlock,
+          previousBlock
+        );
+      } catch (error) {
+        return false;
+      }
+
+      try {
+        if (currentBlock.hash !== currentBlock.calculateHash()) {
+          return false;
+        }
+      } catch (error) {
+        return false;
+      }
+
       if (
         !currentBlock.hash.startsWith(
           "0".repeat(this.difficulty)
