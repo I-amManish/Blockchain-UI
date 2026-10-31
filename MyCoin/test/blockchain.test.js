@@ -346,3 +346,102 @@ test("Rejects a forged historical reward even after its block is re-mined", () =
 
   assert.equal(blockchain.isChainValid(), false);
 });
+
+test("Rejects transactions inserted into the genesis block", () => {
+  const blockchain = new Blockchain();
+  const attacker = ec.genKeyPair();
+
+  const genesisBlock = blockchain.chain[0];
+
+  genesisBlock.transactions.push(
+    new Transaction(
+      null,
+      attacker.getPublic("hex"),
+      1000000
+    )
+  );
+
+  // Simulate recalculating the modified genesis hash.
+  genesisBlock.hash = genesisBlock.calculateHash();
+
+  assert.equal(blockchain.isChainValid(), false);
+});
+
+test("Chain validation rejects signed transactions that overspend historical funds", () => {
+  const blockchain = new Blockchain();
+
+  const senderKey = ec.genKeyPair();
+  const secondMiner = ec.genKeyPair();
+  const recipient = ec.genKeyPair();
+
+  const senderAddress = senderKey.getPublic("hex");
+  const secondMinerAddress = secondMiner.getPublic("hex");
+  const recipientAddress = recipient.getPublic("hex");
+
+  // Mine two blocks to confirm the sender's 100-coin reward.
+  blockchain.minePendingTransactions(senderAddress);
+  blockchain.minePendingTransactions(secondMinerAddress);
+
+  assert.equal(blockchain.getBalanceofAddress(senderAddress), 100);
+
+  // Create a correctly signed transaction that exceeds the sender's balance.
+  const transaction = new Transaction(
+    senderAddress,
+    recipientAddress,
+    101
+  );
+
+  transaction.signTransaction(senderKey);
+
+  // Simulate an attacker inserting the transaction into an existing block.
+  // Block 2 already contains the sender's 100-coin mining reward.
+  const maliciousBlock = blockchain.chain[2];
+
+  maliciousBlock.transactions.push(transaction);
+
+  // Recalculate the hash and proof of work to simulate a deliberate attack.
+  maliciousBlock.hash = maliciousBlock.calculateHash();
+  maliciousBlock.mineBlock(blockchain.difficulty);
+
+  // The chain must remain invalid even after the attacker re-mines the block.
+  assert.equal(blockchain.isChainValid(), false);
+});
+
+test("Refuses to mine a block that would overspend historical funds", () => {
+  const blockchain = new Blockchain();
+
+  const senderKey = ec.genKeyPair();
+  const secondMiner = ec.genKeyPair();
+  const thirdMiner = ec.genKeyPair();
+  const recipient = ec.genKeyPair();
+
+  const senderAddress = senderKey.getPublic("hex");
+
+  blockchain.minePendingTransactions(senderAddress);
+  blockchain.minePendingTransactions(
+    secondMiner.getPublic("hex")
+  );
+
+  const transaction = new Transaction(
+    senderAddress,
+    recipient.getPublic("hex"),
+    101
+  );
+
+  transaction.signTransaction(senderKey);
+
+  // Simulate an invalid transaction bypassing addTransaction().
+  blockchain.pendingTransactions.push(transaction);
+
+  const originalLength = blockchain.chain.length;
+
+  assert.throws(
+    () => blockchain.minePendingTransactions(
+      thirdMiner.getPublic("hex")
+    ),
+    /historical balances/i
+  );
+
+  assert.equal(blockchain.chain.length, originalLength);
+  assert.equal(blockchain.isChainValid(), true);
+});
