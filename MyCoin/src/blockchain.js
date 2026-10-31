@@ -1,3 +1,4 @@
+
 const SHA256 = require("crypto-js/sha256");
 const EC = require("elliptic").ec;
 
@@ -141,11 +142,10 @@ class Blockchain {
     );
 
     block.mineBlock(this.difficulty);
-
     this.chain.push(block);
 
-    // The mining reward is received when the next block
-    // includes this pending reward transaction.
+    // The reward is paid in the next block that includes
+    // this pending mining-reward transaction.
     this.pendingTransactions = [
       new Transaction(
         null,
@@ -155,11 +155,10 @@ class Blockchain {
     ];
   }
 
+  // ==================== TRANSACTION VALIDATION ====================
+
   addTransaction(transaction) {
-    if (
-      !transaction.fromAddress ||
-      !transaction.toAddress
-    ) {
+    if (!transaction.fromAddress || !transaction.toAddress) {
       throw new Error(
         "Transaction must include from and to address"
       );
@@ -181,8 +180,36 @@ class Blockchain {
       );
     }
 
+    // Include previously submitted outgoing transactions
+    // when calculating the funds this sender can spend.
+    const availableBalance =
+      this.getAvailableBalanceOfAddress(
+        transaction.fromAddress
+      );
+
+    if (transaction.amount > availableBalance) {
+      throw new Error(
+        `Insufficient balance. Available balance: ${availableBalance}`
+      );
+    }
+
     this.pendingTransactions.push(transaction);
   }
+
+  // Confirmed balance minus outgoing pending transactions.
+  getAvailableBalanceOfAddress(address) {
+    let availableBalance = this.getBalanceofAddress(address);
+
+    for (const transaction of this.pendingTransactions) {
+      if (transaction.fromAddress === address) {
+        availableBalance -= transaction.amount;
+      }
+    }
+
+    return availableBalance;
+  }
+
+  // ==================== BALANCE CALCULATION ====================
 
   getBalanceofAddress(address) {
     let balance = 0;
@@ -202,14 +229,19 @@ class Blockchain {
     return balance;
   }
 
+  // ==================== CHAIN VALIDATION ====================
+
   isChainValid() {
-    if (!Array.isArray(this.chain) || this.chain.length === 0) {
+    if (
+      !Array.isArray(this.chain) ||
+      this.chain.length === 0
+    ) {
       return false;
     }
 
     const genesisBlock = this.chain[0];
 
-    // Verify the genesis block's expected structure and hash.
+    // Verify the genesis block.
     if (
       genesisBlock.index !== 0 ||
       genesisBlock.previousHash !== "0" ||
@@ -232,12 +264,12 @@ class Blockchain {
         return false;
       }
 
-      // Verify the block's calculated hash.
+      // Verify the calculated block hash.
       if (currentBlock.hash !== currentBlock.calculateHash()) {
         return false;
       }
 
-      // Verify the link to the preceding block.
+      // Verify the connection to the previous block.
       if (currentBlock.previousHash !== previousBlock.hash) {
         return false;
       }

@@ -84,3 +84,87 @@ test("Changing a signed transaction invalidates its signature", () => {
     /Cannot add invalid transaction/
   );
 });
+
+function createFundedBlockchain(walletAddress) {
+  const blockchain = new Blockchain();
+
+  // The second mining operation confirms the first reward.
+  blockchain.minePendingTransactions(walletAddress);
+  blockchain.minePendingTransactions(walletAddress);
+
+  assert.equal(
+    blockchain.getBalanceofAddress(walletAddress),
+    blockchain.miningReward
+  );
+
+  return blockchain;
+}
+
+test("Rejects transactions when the sender has insufficient funds", () => {
+  const blockchain = new Blockchain();
+  const senderKey = ec.genKeyPair();
+  const receiverKey = ec.genKeyPair();
+
+  const transaction = new Transaction(
+    senderKey.getPublic("hex"),
+    receiverKey.getPublic("hex"),
+    1
+  );
+
+  transaction.signTransaction(senderKey);
+
+  assert.throws(
+    () => blockchain.addTransaction(transaction),
+    /Insufficient balance/
+  );
+});
+
+test("Rejects pending transactions that collectively overspend the balance", () => {
+  const senderKey = ec.genKeyPair();
+  const receiverKey = ec.genKeyPair();
+
+  const senderAddress = senderKey.getPublic("hex");
+  const blockchain = createFundedBlockchain(senderAddress);
+
+  const firstTransaction = new Transaction(
+    senderAddress,
+    receiverKey.getPublic("hex"),
+    70
+  );
+
+  firstTransaction.signTransaction(senderKey);
+  blockchain.addTransaction(firstTransaction);
+
+  const secondTransaction = new Transaction(
+    senderAddress,
+    receiverKey.getPublic("hex"),
+    40
+  );
+
+  secondTransaction.signTransaction(senderKey);
+
+  assert.throws(
+    () => blockchain.addTransaction(secondTransaction),
+    /Insufficient balance/
+  );
+});
+
+test("Accepts a valid transfer within the available balance", () => {
+  const senderKey = ec.genKeyPair();
+  const receiverKey = ec.genKeyPair();
+
+  const senderAddress = senderKey.getPublic("hex");
+  const blockchain = createFundedBlockchain(senderAddress);
+
+  const transaction = new Transaction(
+    senderAddress,
+    receiverKey.getPublic("hex"),
+    60
+  );
+
+  transaction.signTransaction(senderKey);
+  blockchain.addTransaction(transaction);
+
+  assert.ok(blockchain.pendingTransactions.includes(transaction));
+  assert.equal(blockchain.getBalanceofAddress(senderAddress), 100);
+});
