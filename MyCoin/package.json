@@ -1,4 +1,9 @@
+
 {
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test"
+  },
   "dependencies": {
     "crypto-js": "^4.2.0",
     "elliptic": "^6.6.1"

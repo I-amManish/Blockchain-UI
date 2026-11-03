@@ -24,6 +24,20 @@ console.log(
   sajveeCoin.getBalanceofAddress(princeWalletAddress),
 );
 
+// Confirm Ben's first mining reward before he spends it.
+console.log("\n👷 Ben is mining a confirmation block...");
+sajveeCoin.minePendingTransactions(benWalletAddress);
+
+console.log("\n=== AFTER REWARD CONFIRMATION ===");
+console.log(
+  "Ben's balance:",
+  sajveeCoin.getBalanceofAddress(benWalletAddress),
+);
+console.log(
+  "Prince's balance:",
+  sajveeCoin.getBalanceofAddress(princeWalletAddress),
+);
+
 // Step 3: Ben sends 50 coins to Prince
 console.log("\n💸 Ben sends 50 coins to Prince...");
 const tx1 = new Transaction(benWalletAddress, princeWalletAddress, 50);
