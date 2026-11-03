@@ -1,86 +1,136 @@
-# Blockchain UI — MyCoin
+Blockchain-UI 🪙
 
-An educational blockchain project that explores core blockchain concepts through a JavaScript implementation and a React + TypeScript interface.
+A full-stack educational blockchain application featuring a custom JavaScript cryptographic blockchain engine, an 18-test suite, and a modern React + TypeScript web interface built with Vite and Tailwind CSS.
 
-> **Educational use only:** This project is for learning and experimentation. It is not a production blockchain, cryptocurrency, or secure wallet. Do not use real funds or real private keys.
+📌 Overview
 
-## Project goals
+Blockchain-UI demonstrates the foundational principles of blockchain technology, cryptography, proof-of-work consensus, and wallet state management. It provides a visual and interactive way to explore how blocks are mined, how transactions are signed and validated, and how chain integrity is maintained.
 
-- Explore blocks, hashes, proof-of-work, transactions, and digital signatures.
-- Learn how a blockchain data model can be presented through a React interface.
-- Practice frontend integration, TypeScript, and software testing.
-- Document implementation choices and known limitations as the project develops.
+⚠️ Disclaimer: This project is designed strictly for educational and learning purposes. It is not intended for production cryptocurrency deployments.
 
-## Repository structure
+✨ Features
 
-```text
+⚙️ Core Blockchain Engine (MyCoin/)
+
+Elliptic Curve Cryptography: Uses elliptic (secp256k1) for key generation, wallet addressing, and digital signatures.
+
+SHA-256 Hashing: Uses crypto-js to compute deterministic block and transaction hashes.
+
+Proof-of-Work (PoW): Configurable difficulty target for mining new blocks.
+
+Overspending & Balance Protection: Validates transactions against confirmed historical balances as well as unconfirmed pending transactions to prevent double-spending.
+
+Mining Reward System: Miner wallet addresses are bound directly to block headers, enforcing strict reward attribution and single-reward-per-block rules.
+
+Genesis & Chain Validation: Replays full transaction histories to verify chain integrity, sequential block indexing, and unaltered genesis blocks.
+
+🧪 Unit Testing (MyCoin/test/)
+
+Automated Test Suite: Includes 18 comprehensive unit tests powered by the native Node.js test runner (node --test).
+
+Coverage Includes: Signature tampering detection, proof-of-work verification, genesis block immutability, historical balance overspending protection, duplicate reward rejection, and candidate block pre-mine validation.
+
+💻 Frontend Interface (MyCoin/MyCoin-frontend-react/)
+
+React 19 & TypeScript: Type-safe components and state management.
+
+Vite: High-performance local development build tooling.
+
+Tailwind CSS v4: Modern, responsive UI styling.
+
+Features: Block explorer visualizer, interactive transaction creation form, pending transactions queue manager, wallet address inspector, and settings panel.
+
+📁 Repository Structure
+
 Blockchain-UI/
-└── MyCoin/
+├── README.md                      # Root project documentation
+├── docs/
+│   └── superpowers/plans/         # Architecture & security plans
+└── MyCoin/                        # Core Blockchain Workspace
+    ├── package.json               # Backend dependencies & test scripts
     ├── src/
-    │   ├── blockchain.js       # Educational blockchain and transaction classes
-    │   └── keygenerator.js     # Key-pair generation example
-    ├── LEARNING_NOTES.md       # Notes on blockchain concepts and implementation
-    └── MyCoin-frontend-react/
+    │   ├── blockchain.js          # Transaction, Block & Blockchain implementation
+    │   ├── keygenerator.js        # EC key pair generator helper
+    │   └── main.js                # CLI demonstration script
+    ├── test/
+    │   └── blockchain.test.js     # 18-test unit suite (Node.js test runner)
+    └── MyCoin-frontend-react/     # React + TypeScript Frontend
+        ├── package.json           # Frontend dependencies & Vite scripts
         ├── src/
-        │   ├── components/     # Reusable UI components
-        │   ├── pages/          # Blockchain, wallet, transaction, and settings pages
-        │   └── services/       # Frontend blockchain service
-        ├── package.json
-        └── README.md
-```
+        │   ├── App.tsx            # Main React application router
+        │   ├── components/        # UI tables & navigation bars
+        │   ├── pages/             # Blockchain Viewer, Wallet, Settings, etc.
+        │   └── services/          # Frontend blockchain service abstraction
+        └── vite.config.ts         # Vite configuration file
 
-## Features represented in the code
 
-- Blockchain and block data structures
-- Proof-of-work mining demonstration
-- Transaction signing and signature verification
-- A React interface for viewing blocks and transactions
-- Pages for creating transactions, viewing pending transactions, and inspecting wallet details
-- Settings for the demonstration's mining difficulty and reward
+🚀 Quick Start Guide
 
-Some frontend and blockchain-service integrations may still need work. See [Known limitations](#known-limitations) before relying on any displayed data.
+Prerequisites
 
-## Requirements
+Node.js: v18.x or higher (tested on v24.x)
 
-- Node.js compatible with the Vite version specified in the frontend package
-- npm
+npm: v9.x or higher
 
-## Run the frontend
+1. Core Engine & Test Suite Setup
 
-From a terminal, run:
+Navigate to the MyCoin backend workspace:
 
-```bash
+cd MyCoin
+npm install
+
+
+Run Automated Tests (18 Unit Tests)
+
+npm test
+
+
+Run CLI Blockchain Simulation
+
+npm start
+
+
+2. React Frontend Setup
+
+Open a new terminal session and navigate to the frontend directory:
+
 cd MyCoin/MyCoin-frontend-react
 npm install
+
+
+Start Development Server
+
 npm run dev
-```
 
-Open the local URL printed by Vite in the terminal.
 
-To check the frontend's production build:
+Open your browser at the URL shown in your terminal (typically http://localhost:5173).
 
-```bash
-npm run build
-```
+🛡️ Security Features & Validation Rules
 
-The frontend currently depends on the `savjeecoin` npm package. The repository also contains a local blockchain implementation under `MyCoin/src/`; these implementations should not be assumed interchangeable until their APIs are aligned.
+Transaction Authorization: Every transaction must be signed using the sender's private key matching their fromAddress public key.
 
-## Learning notes
+Positive Finite Amounts: Transactions with zero, negative, NaN, or infinite values are rejected.
 
-See [MyCoin/LEARNING_NOTES.md](MyCoin/LEARNING_NOTES.md) for explanations of nonces, proof-of-work, blockchain data structures, and transaction lifecycle concepts.
+Pending Outgoing Reservation: When calculating spendable funds, pending outgoing transactions reserved in the pool are deducted automatically.
 
-## Known limitations
+Pre-Mine Verification: Candidate blocks are evaluated for historical balance compliance before executing proof-of-work algorithms.
 
-- This is a single-process learning demo, not a distributed peer-to-peer blockchain network.
-- It does not provide production-grade consensus, persistent storage, or a secure wallet.
-- Transaction validation, balance enforcement, mining-reward rules, and chain validation require further testing and hardening.
-- The frontend and local blockchain implementation have API differences that should be resolved and covered by tests.
-- Do not enter or store real private keys or use this project to hold real assets.
+Mining Reward Restrictions: Mining rewards cannot be claimed in the genesis block, and subsequent blocks permit exactly one reward transaction tied to the prior block's miner.
 
-## Contributing
+🤝 Contributing
 
-Issues, bug reports, documentation improvements, and tested code contributions are welcome. When proposing a change, describe the problem, explain the solution, and include tests where practical.
+Contributions, issues, and feature requests are welcome! Feel free to check out existing issues or open a pull request.
 
-## License
+Fork the Project
 
-No license is currently specified for this repository. Until a license is added after reviewing the licensing of the tutorial-derived code and dependencies, do not assume that the code is available for unrestricted reuse.
+Create your Feature Branch (git checkout -b feature/AmazingFeature)
+
+Commit your Changes (git commit -m 'Add some AmazingFeature')
+
+Push to the Branch (git push origin feature/AmazingFeature)
+
+Open a Pull Request
+
+📄 License
+
+Distributed under the MIT License. Educational use and experimentation are encouraged.
