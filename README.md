@@ -6,7 +6,7 @@ An educational full-stack blockchain platform combining a Node.js consensus engi
 
 ## 🌟 Key Features
 
-- **Proof-of-Work (PoW) Consensus:** Dynamic block mining with configurable difficulty target verification.
+- **Proof-of-Work (PoW) Consensus:** Dynamic block mining with configurable difficulty target verification (`000...`).
 - **Elliptic-Curve Cryptography:** Transaction signing and key generation using `secp256k1` curves via `elliptic` and SHA-256 hashing via `crypto-js`.
 - **Strict Overspending Protection:** Validates sender balances against both confirmed chain state and unmined pending transaction queues.
 - **Secure Mining Reward Rules:** Binds miner identities into block headers, enforces one reward per mined block, and validates historical reward distribution.
@@ -19,13 +19,20 @@ An educational full-stack blockchain platform combining a Node.js consensus engi
 
 ```text
 Blockchain-UI/
-├── README.md
+├── README.md                           # Main repository documentation
 └── MyCoin/
-    ├── package.json
+    ├── package.json                    # Backend dependencies & test scripts
+    ├── LEARNING_NOTES.md               # Concept guide and architectural notes
     ├── src/
-    │   ├── blockchain.js       # Core Blockchain, Block, & Transaction classes
-    │   ├── keygenerator.js     # Secp256k1 keypair generator utility
-    │   └── main.js             # Execution CLI demonstration script
+    │   ├── blockchain.js               # Core Blockchain, Block, & Transaction classes
+    │   ├── keygenerator.js             # Secp256k1 keypair generator utility
+    │   └── main.js                     # Execution CLI demonstration script
     ├── test/
-    │   └── blockchain.test.js  # 18-test automated unit testing suite
-    └── MyCoin-frontend-react/  # React 19 + TypeScript + Vite frontend
+    │   └── blockchain.test.js          # 18-test automated unit testing suite
+    └── MyCoin-frontend-react/          # React 19 + TypeScript + Vite frontend
+        ├── package.json
+        ├── src/
+        │   ├── App.tsx                 # Router & navigation setup
+        │   ├── pages/                  # Blockchain viewer, transactions, settings, wallet
+        │   └── services/
+        │       └── blockchainService.js # Bridge between React state & engine logic
